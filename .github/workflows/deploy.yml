@@ -1,4 +1,4 @@
-name: Deploy to VM on Push
+name: Test SSH Connection
 
 on:
   push:
@@ -6,18 +6,14 @@ on:
       - main
 
 jobs:
-  deploy:
+  test-ssh:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        
       - name: Create SSH key file
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ls -la ~/.ssh/id_rsa
           
       - name: Add host to known hosts
         run: |
@@ -25,20 +21,4 @@ jobs:
           
       - name: Test SSH connection
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -vvv ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo Connection successful"
-          
-      - name: SSH and Deploy
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key_path: ~/.ssh/id_rsa
-          port: 22
-          script: |
-            cd /home/harsh/chatbot
-            git pull origin main
-            # Commands to restart the services after pulling
-            pkill -f "flask --app backend_app.py" || true
-            pkill -f "streamlit run streamlit_app.py" || true
-            nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 &
-            nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo Connection successful && ls -la"
