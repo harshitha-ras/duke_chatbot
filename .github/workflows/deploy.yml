@@ -29,6 +29,9 @@ jobs:
             git pull origin main && 
             pkill -f "flask --app backend_app.py" || true && 
             pkill -f "streamlit run streamlit_app.py" || true && 
+            source /home/harsh/venv/bin/activate &&
+            pip install -r requirements.txt || true &&
             nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 & 
             nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
+            echo "Deployment completed at $(date)"
           '
