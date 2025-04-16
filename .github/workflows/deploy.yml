@@ -22,8 +22,8 @@ jobs:
       - name: Set SSH key permissions
         run: chmod 400 ~/.ssh/id_rsa
 
-      - name: Add GitHub to known hosts
-        run: ssh-keyscan github.com >> ~/.ssh/known_hosts
+      - name: List SSH keys
+        run: ls -lha ~/.ssh
 
       - name: SSH and Git Pull
         uses: appleboy/ssh-action@master
