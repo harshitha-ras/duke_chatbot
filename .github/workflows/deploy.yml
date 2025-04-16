@@ -25,7 +25,7 @@ jobs:
       - name: Deploy to VM
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            cd /home/harsh/chatbot && 
+            cd /home/harsh/duke_chatbot && 
             git pull origin main && 
             pkill -f "flask --app backend_app.py" || true && 
             pkill -f "streamlit run streamlit_app.py" || true && 
