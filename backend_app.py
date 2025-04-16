@@ -16,14 +16,13 @@ def get_chatbot_response(user_message):
     return random.choice(responses)
 # --- End of chatbot logic section ---
 
+# In your Flask route that handles chat
 @app.route('/chat', methods=['POST'])
 def chat():
-    try:
-        user_message = request.json['message']
-        bot_response = get_chatbot_response(user_message)
-        return jsonify({'response': bot_response})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    user_message = request.json.get('message', '')
+    response = process_user_query(user_message)
+    return jsonify({'response': response})
+
 
 if __name__ == '__main__':
     # Listen on 0.0.0.0 to be accessible externally *if needed*,
