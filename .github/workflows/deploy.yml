@@ -9,15 +9,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Deploy with rsync
-        uses: Chepsbay/action-rsync@v1.0.2
-        env:
-          host: ${{ secrets.SSH_HOST }}
-          user: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@master
         with:
-          flags: '-avz --delete'
-          options: ''
-          source: ./
-          destination: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/harsh/chatbot
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /home/harsh/chatbot
+            git pull origin main
+            # Commands to restart the services after pulling
+            pkill -f "flask --app backend_app.py" || true
+            pkill -f "streamlit run streamlit_app.py" || true
+            nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 &
+            nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
