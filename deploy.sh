@@ -1,6 +1,4 @@
 #!/bin/bash
-# /home/harsh/duke_chatbot/deploy.sh
-
 cd /home/harsh/duke_chatbot
 git pull origin main
 
@@ -10,6 +8,9 @@ pkill -f "streamlit run streamlit_app.py" || true
 
 # Activate virtual environment
 source /home/harsh/venv/bin/activate
+
+# Install or update dependencies
+pip install -r requirements.txt
 
 # Start Flask backend
 nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 &
