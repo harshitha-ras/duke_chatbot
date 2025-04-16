@@ -9,6 +9,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: List SSH keys
+        run: ls -lha ~/.ssh
+
       - name: SSH and Git Pull
         uses: appleboy/ssh-action@master
         with:
@@ -19,11 +22,9 @@ jobs:
           script: |
             cd /home/harsh/chatbot
             git pull origin main
-
             # Stop existing processes (replace with actual process names if different)
             pkill -f "flask --app backend_app.py"
             pkill -f "streamlit run streamlit_app.py"
-
             # Restart the services (assuming you are in the project directory)
             nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 &
             nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
