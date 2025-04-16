@@ -24,23 +24,4 @@ jobs:
           
       - name: Deploy to VM
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
-            cd /home/harsh/duke_chatbot
-            git pull origin main
-            
-            # Kill existing processes
-            pkill -f "flask --app backend_app.py" || true
-            pkill -f "streamlit run streamlit_app.py" || true
-            
-            # Ensure virtual environment is activated
-            source /home/harsh/venv/bin/activate
-            
-            # Start Flask backend
-            nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 &
-            
-            # Start Streamlit frontend (with a sleep to ensure Flask is up)
-            sleep 5
-            nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
-            
-            echo "Deployment completed at $(date)"
-          EOF
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash /home/harsh/duke_chatbot/deploy.sh'
