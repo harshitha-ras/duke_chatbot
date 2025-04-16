@@ -18,22 +18,21 @@ jobs:
       - name: Set SSH key permissions
         run: chmod 400 ~/.ssh/id_rsa
 
-      - name: List SSH keys
-        run: ls -lha ~/.ssh
+      - name: Add GitHub to known hosts
+        run: ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: SSH and Git Pull
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ~/.ssh/id_rsa
           port: 22
           script: |
             cd /home/harsh/chatbot
             git pull origin main
-            # Stop existing processes (replace with actual process names if different)
+            #Commands to restart the services after pulling
             pkill -f "flask --app backend_app.py"
             pkill -f "streamlit run streamlit_app.py"
-            # Restart the services (assuming you are in the project directory)
             nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 &
             nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &
