@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 
 st.set_page_config(page_title="My Chatbot") # [6]
-st.title("My Chatbot Interface 1") # [2, 6]
+st.title("My Chatbot Interface 2") # [2, 6]
 
 # URL for the backend API running on the *same* VM
 BACKEND_URL = "http://127.0.0.1:5000/chat" # Calls the Flask app locally
