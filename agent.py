@@ -1,26 +1,23 @@
-# agent.py
 from langchain.agents import initialize_agent, AgentType
 from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain_core.tools import Tool
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
 import os
-import json
 from dotenv import load_dotenv
 
 serpapi_api_key = os.getenv("SERPAPI_API_KEY")
 
 # Import your custom tools from tools.py
 from tools import (
-    get_events_from_duke_api,
     get_curriculum_with_subject_from_duke_api,
-    get_detailed_course_information_from_duke_api,
+    get_events_from_duke_api_single_input,
+    get_course_details_single_input,
     get_people_information_from_duke_api,
     search_subject_by_code,
     search_group_format,
     search_category_format,
     get_pratt_info_from_serpapi,
-    get_specific_pratt_info
 )
 
 # Load environment variables from .env file
@@ -45,32 +42,24 @@ def create_duke_agent():
     tools = [
         Tool(
             name="get_duke_events",
-            func=get_events_from_duke_api,
+            func=get_events_from_duke_api_single_input,
             description=(
-                "This tool retrieves upcoming events from Duke University's public calendar API based on a free-form, "
-                "natural language query. The tool first processes the query to determine the relevant event filters by "
-                "automatically mapping your input to the correct organizer groups and thematic categories. It does so "
-                "by reading the full lists of valid groups and categories from local text files, reducing those lists "
-                "via fuzzy matching (or retrieval-augmented generation) to a small set of top candidates, and then using "
-                "an LLM to select the final filter values. If no relevant filters are identified, it defaults to using ['All'] "
-                "for that parameter, ensuring that the API call is still valid. \n\n"
+                "This tool retrieves upcoming events from Duke University's public calendar API based on a free-form natural language query. "
+                "It processes your query by automatically mapping your input to the correct organizer groups and thematic categories. "
+                "To do this, it reads the full lists of valid groups and categories from local text files, then uses fuzzy matching or retrieval-augmented generation "
+                "to narrow these lists to the most relevant candidates. An LLM is subsequently used to select the final filter values; if no suitable filters "
+                "are found, it defaults to ['All'] to maintain a valid API call. \n\n"
                 "Parameters:\n"
-                "  - prompt (str): A natural language query describing the event filters you wish to apply. For example, "
-                "\"Please give me the events of aipi\" will be processed to select the appropriate group(s) and category(ies).\n"
-                "  - feed_type (str): The format in which the event data should be returned. Accepted values include "
-                "'rss', 'js', 'ics', 'csv', 'json', and 'jsonp'. The default is 'json'.\n"
-                "  - future_days (int): The number of days into the future for which to retrieve events. The default is 45.\n"
-                "  - filter_method_group (bool): Determines the logic used for filtering events by groups. When set to True, "
-                "an event is included if it matches ANY of the specified groups (logical OR); when False, the event must match ALL "
-                "specified groups (logical AND). The default is True.\n"
-                "  - filter_method_category (bool): Determines the logic used for filtering events by categories. When set to True, "
-                "an event is included if it matches ANY of the specified categories (logical OR); when False, the event must match ALL "
-                "specified categories (logical AND). The default is True.\n\n"
-                "The tool returns the raw calendar event data as provided by Duke University's API (or an error message if the API request fails). "
-                "It is ideal for dynamically retrieving event information without having to manually specify the detailed filter values, "
-                "since the mapping process leverages an LLM to interpret your query and select the correct filters from the available lists."
-                )
-            ),
+                "  - prompt (str): A natural language description of the event filters you wish to apply (e.g., 'Please give me the events of AIPI').\n"
+                "  - feed_type (str): The desired format for the returned data. Accepted values include 'rss', 'js', 'ics', 'csv', 'json', and 'jsonp'.\n"
+                "  - future_days (int): The number of days into the future for which to retrieve events (default is 45).\n"
+                "  - filter_method_group (bool): Defines filtering for organizer groups. If True, an event is included if it matches ANY specified group; "
+                "if False, it must match ALL specified groups.\n"
+                "  - filter_method_category (bool): Defines filtering for thematic categories. If True, an event is included if it matches ANY specified category; "
+                "if False, it must match ALL specified categories.\n\n"
+                "The tool returns the raw event data from Duke University's calendar API, or an error message if the API request fails."
+            )
+        ),
         Tool(
             name="get_curriculum_with_subject_from_duke_api",
             func=get_curriculum_with_subject_from_duke_api,
@@ -85,15 +74,20 @@ def create_duke_agent():
         ),
         Tool(
             name="get_detailed_course_information_from_duke_api",
-            func=get_detailed_course_information_from_duke_api,
+            func=get_course_details_single_input,
             description=(
-                "Use this tool to retrieve detailed curriculum information from Duke University's API."
-                "The course ID and course offer number can be obtained from get_curriculum_with_subject_from_duke_api."
-                "Parameters:"
-                "   course_id (str): The course ID to get curriculum data for. For example, the course ID is 029248' for General African American Studies."
-                "   course_offer_number (str): The course offer number to get curriculum data for. For example, the course offer number is '1' for General African American Studies."
-                "Return:"
-                "   str: Raw curriculum data in JSON format or an error message."
+                "Use this tool to retrieve detailed curriculum information from Duke University's API. "
+                "You must provide both a valid course ID (course_id) and a course offer number (course_offer_number), "
+                "but **pass them as a single string** in the format 'course_id,course_offer_number'. "
+                "\n\nFor example:\n"
+                "  '027568,1' for course_id='027568' and course_offer_number='1'.\n\n"
+                "These parameters can be obtained from get_curriculum_with_subject_from_duke_api, which returns a list "
+                "of courses (each with a 'crse_id' and 'crse_offer_nbr').\n\n"
+                "Parameters:\n"
+                "  - course_id (str): The unique ID of the course, e.g. '029248'.\n"
+                "  - course_offer_number (str): The offer number for that course, e.g. '1'.\n\n"
+                "Return:\n"
+                "  - str: Raw curriculum data in JSON format, or an error message if something goes wrong."
             )
         ),
         Tool(
@@ -176,6 +170,7 @@ def create_duke_agent():
     1. **THINK**:
     - Carefully analyze the user’s query to determine which domain(s) it touches: AI MEng details, prospective student facts, or campus events.
     - Decide which API tools are the best fit to get accurate data.
+    - If it is a general query, use the PrattSearch tool to find relevant information first, then use the specialized tools for specific details.
 
     2. **FORMAT SEARCH**:
     - NEVER pass user-provided subject, group, or category formats directly to the API tools.
@@ -225,8 +220,15 @@ def create_duke_agent():
     
     return agent
 
-# Example usage
 def process_user_query(query):
+    """
+    Process a user query using the Duke agent.
+    Args:
+        query (str): The user query to process.
+    Returns:
+        str: The response from the agent.
+    
+    """
     try:
         # Create the agent
         duke_agent = create_duke_agent()
@@ -240,21 +242,20 @@ def process_user_query(query):
         print(f"Error processing query: {str(e)}")
         return f"An error occurred: {str(e)}"
 
-# Example usage
 def main():
     # Test queries that demonstrate format compatibility
     test_queries = [
-        # "What events are happening at Duke this week?",
+        "What events are happening at Duke this week?",
         "Get me detailed information about the AIPI courses",
-        # "Tell me about Computer Science classes",
-        # "Are there any AI events at Duke?",
-        # "What cs courses are available?",
-        # "Tell me about AI Meng program",
-        # "please show me the events related to data science",
-        # "please tell me about Brinnae Bent",
-        # "tell me some professors who are working on AI",
-        # "Introduce me Duke University",
-        # "Tell me something about Pratt School of Engineering at Duke",
+        "Tell me about Computer Science classes",
+        "Are there any AI events at Duke?",
+        "What cs courses are available?",
+        "Tell me about AIPI program",
+        "please show me the events related to data science",
+        "please tell me about Brinnae Bent",
+        "tell me some professors who are working on AI",
+        "Introduce me Duke University",
+        "Tell me something about Pratt School of Engineering at Duke",
     ]
     
     for query in test_queries:
