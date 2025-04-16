@@ -12,12 +12,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         
+      - name: Create SSH key file
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ls -la ~/.ssh/id_rsa
+          
+      - name: Add host to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          
+      - name: Test SSH connection
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -vvv ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo Connection successful"
+          
       - name: SSH and Deploy
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key_path: ~/.ssh/id_rsa
           port: 22
           script: |
             cd /home/harsh/chatbot
