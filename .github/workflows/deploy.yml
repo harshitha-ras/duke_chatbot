@@ -1,4 +1,4 @@
-name: Test SSH Connection
+name: Deploy to VM on Push
 
 on:
   push:
@@ -6,9 +6,12 @@ on:
       - main
 
 jobs:
-  test-ssh:
+  deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
       - name: Create SSH key file
         run: |
           mkdir -p ~/.ssh
@@ -19,6 +22,6 @@ jobs:
         run: |
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
           
-      - name: Test SSH connection
+      - name: Deploy to VM
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo Connection successful && ls -la"
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd /home/harsh/chatbot && git pull origin main && pkill -f 'flask --app backend_app.py' || true && pkill -f 'streamlit run streamlit_app.py' || true && nohup flask --app backend_app.py run --host=127.0.0.1 --port=5000 > flask.log 2>&1 & && nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > streamlit.log 2>&1 &"
