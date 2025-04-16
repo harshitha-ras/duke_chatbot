@@ -13,16 +13,23 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 model_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Load valid options from files
+# Define the tools
 def load_options_from_file(filename):
+    """
+    Load valid options from a text file, where each line is an option.
+    Args:
+        filename (str): Path to the text file containing valid options.
+    Returns:
+        list: List of valid options.
+    """
     with open(filename, 'r') as file:
         return [line.strip() for line in file]
-
+    
 # Try to load the valid options
 try:
-    valid_groups = load_options_from_file('groups.txt')
-    valid_categories = load_options_from_file('categories.txt')
-    valid_subjects = load_options_from_file('subjects.txt')
+    valid_groups = load_options_from_file('resources/groups.txt')
+    valid_categories = load_options_from_file('resources/categories.txt')
+    valid_subjects = load_options_from_file('resources/subjects.txt')
 except FileNotFoundError as e:
     print(f"Warning: Could not load options file: {e}")
     valid_groups = []
@@ -42,15 +49,28 @@ def filter_candidates(query: str, candidates: list, top_n: int = 10) -> list:
     return [candidate for candidate, score in scored[:top_n]]
 
 def load_valid_values(filename: str) -> list:
+    """
+    Load valid values from a text file, removing empty lines and stripping whitespace.
+    Args:
+        filename (str): Path to the text file containing valid values.
+    Returns:
+        list: List of valid values.
+    """
     with open(filename, "r", encoding="utf8") as f:
         # Remove empty lines and strip whitespace
         return [line.strip() for line in f if line.strip()]
 
 def load_valid_groups():
-    return load_valid_values("groups.txt")
+    """
+    Load valid groups from the groups.txt file.
+    """
+    return load_valid_values("resources/groups.txt")
 
 def load_valid_categories():
-    return load_valid_values("categories.txt")
+    """
+    Load valid categories from the categories.txt file.
+    """
+    return load_valid_values("resources/categories.txt")
 
 def llm_map_prompt_to_filters(prompt: str):
     """
@@ -63,6 +83,13 @@ def llm_map_prompt_to_filters(prompt: str):
     
     If the LLM fails to return valid JSON, it defaults to returning empty lists.
     This function is designed to be used as a tool in a LangChain agent.
+
+    Args:
+        prompt (str): Natural language prompt describing the query for events.
+    Returns:
+        tuple: A tuple containing two lists:
+            - groups (list): List of selected groups.
+            - categories (list): List of selected categories.
     """
     # Load full lists from files
     valid_groups = load_valid_groups()
@@ -82,10 +109,11 @@ def llm_map_prompt_to_filters(prompt: str):
 
     # Compose the system prompt as before
     system_prompt = (
-        "You are an expert at mapping natural language input to valid filter values. "
-        "I will provide you a list of valid groups and valid categories along with a user query. "
-        "You must choose only values from the provided lists. If none of the items match, "
-        "return ['All'] for that field. Return only valid JSON with keys 'groups' and 'categories'."
+        "You are an expert at mapping natural language input to valid filter values. I will provide you with "
+        "a list of valid groups and valid categories, along with a user query. Your task is to select from these "
+        "lists only the values that best match the query. If none of the items in a list match, then based on the query, "
+        "return ['All'] if the query implies retrieving all events, or an empty list if it does not. "
+        "Return only a valid JSON object with two keys: 'groups' and 'categories'."
     )
     
     # Compose the user prompt with only the reduced lists
@@ -93,11 +121,12 @@ def llm_map_prompt_to_filters(prompt: str):
         f"Valid groups: {json.dumps(filtered_groups)}\n"
         f"Valid categories: {json.dumps(filtered_categories)}\n"
         f"User query: \"{prompt}\"\n\n"
-        "Based on the user query, please select the most relevant groups and categories from the lists above. "
-        "Return a JSON object with the keys 'groups' and 'categories'."
+        "Based on the lists above, select the groups and categories that best match the user query. "
+        "Return your answer strictly as a JSON object with two keys: 'groups' and 'categories'."
     )
 
     try:
+        # Call the LLM with the system and user prompts
         response = model_client.chat.completions.create(
             model="gpt-4",
             messages=[
@@ -106,6 +135,7 @@ def llm_map_prompt_to_filters(prompt: str):
             ],
             temperature=0.0  # Low temperature to keep the output deterministic
         )
+        # Extract the answer from the response
         response = response.model_dump()
         answer = response['choices'][0]['message']['content']
         # Parse the response as JSON. If parsing fails, default to ['All'].
@@ -156,8 +186,10 @@ def events_from_duke_api(feed_type: str = "json",
     if feed_type not in ['rss', 'js', 'ics', 'csv']:
         feed_type_param = "feed_type=simple"
     
+    # If feed_type is not one of these types, add the simple feed_type parameter.
     feed_type_url = feed_type_param if feed_type_param else ""
 
+    # If the filter_method_group is True, then the group_url is empty.
     if filter_method_group:
         if 'All' in groups:
             group_url = ""
@@ -205,26 +237,29 @@ def get_events_from_duke_api(prompt: str,
     """
     Retrieve events from Duke University's public calendar API based on a natural language prompt.
 
-    prompt (str): Natural language prompt describing the query for events.
+    Args:
+        prompt (str): Natural language prompt describing the query for events.
 
-    feed_type (str): Format of the returned data. Acceptable values include:
-                         'rss', 'js', 'ics', 'csv', 'json', 'jsonp'. Defaults to 'json'.
+        feed_type (str): Format of the returned data. Acceptable values include:
+                            'rss', 'js', 'ics', 'csv', 'json', 'jsonp'. Defaults to 'json'.
 
-    future_days (int): Number of days into the future for which to fetch events.
-                           Defaults to 45.
+        future_days (int): Number of days into the future for which to fetch events.
+                            Defaults to 45.
 
-    filter_method_group (bool): 
-    - False: Event must match ALL specified groups (AND).
-    - True: Event may match ANY of the specified groups (OR).
+        filter_method_group (bool): 
+        - False: Event must match ALL specified groups (AND).
+        - True: Event may match ANY of the specified groups (OR).
 
-    filter_method_category (bool): 
-    - False: Event must match ALL specified categories (AND).
-    - True: Event may match ANY of the specified categories (OR).
+        filter_method_category (bool): 
+        - False: Event must match ALL specified categories (AND).
+        - True: Event may match ANY of the specified categories (OR).
+    Returns:
+        str: Raw calendar data (e.g., in JSON, XML, or ICS format) or an error message.
     """
     # Use the LLM-based mapping to get groups and categories
     groups, categories = llm_map_prompt_to_filters(prompt)
-    if not groups or not categories:
-            return "Error: Unable to find any related groups or categories for the given prompt."
+    if not groups and not categories:
+        return "Error: Unable to find any related groups or categories for the given prompt."
     
     print(f"LLM mapped prompt '{prompt}' to groups {groups} and categories {categories}")
     
@@ -237,12 +272,73 @@ def get_events_from_duke_api(prompt: str,
         filter_method_group=filter_method_group,
         filter_method_category=filter_method_category
     )
+
+def get_events_from_duke_api_single_input(arg_str: str) -> str:
+    """
+    A wrapper that parses a single comma-separated string input and calls
+    get_events_from_duke_api with the appropriate arguments.
+
+    Expected input format:
+        "prompt, feed_type, future_days, filter_method_group, filter_method_category"
+
+    - prompt (str): Required natural language query for event retrieval.
+    - feed_type (str): Optional; defaults to 'json' if not provided.
+    - future_days (int): Optional; defaults to 45 if not provided.
+    - filter_method_group (bool): Optional; defaults to True if not provided.
+    - filter_method_category (bool): Optional; defaults to True if not provided.
+
+    If only the prompt is provided, the default values are used for the remaining parameters.
+    Returns:
+        str: Raw calendar data (e.g., in JSON, XML, or ICS format) or an error message.
+    """
+    # Split the input string by commas and strip whitespace from each part.
+    parts = [part.strip() for part in arg_str.split(",")]
     
+    # Required parameter: prompt.
+    if len(parts) < 1 or not parts[0]:
+        return "Error: The prompt must be provided."
+    prompt = parts[0]
+    
+    # Optional parameter: feed_type. Defaults to "json".
+    feed_type = parts[1] if len(parts) > 1 and parts[1] else "json"
+    
+    # Optional parameter: future_days. Defaults to 45.
+    try:
+        future_days = int(parts[2]) if len(parts) > 2 and parts[2] else 45
+    except ValueError:
+        future_days = 45  # fallback if parsing fails
+    
+    # Optional parameter: filter_method_group. Defaults to True.
+    # If provided and equals "False" (case-insensitive), then use False.
+    filter_method_group = True
+    if len(parts) > 3:
+        if parts[3].lower() in ["false", "0"]:
+            filter_method_group = False
+
+    # Optional parameter: filter_method_category. Defaults to True.
+    filter_method_category = True
+    if len(parts) > 4:
+        if parts[4].lower() in ["false", "0"]:
+            filter_method_category = False
+
+    # Call the original function with the parsed parameters.
+    return get_events_from_duke_api(
+        prompt=prompt,
+        feed_type=feed_type,
+        future_days=future_days,
+        filter_method_group=filter_method_group,
+        filter_method_category=filter_method_category
+    )
+
 
 def get_curriculum_with_subject_from_duke_api(subject: str):
     """
     Retrieve curriculum information from Duke University's API by specifying a subject code.
     Returns information about available courses.
+    Args:
+        subject (str): The subject code to get curriculum data for. For example, the subject code is 'AIPI' for Artificial Intelligence for Product Innovation.
+    Returns:
+        str: Raw curriculum data in JSON format or an error message.
     """
     subject_url = quote(subject, safe="")
     url = f'https://streamer.oit.duke.edu/curriculum/courses/subject/{subject_url}?access_token=19d3636f71c152dd13840724a8a48074'
@@ -289,6 +385,16 @@ def get_detailed_course_information_from_duke_api(course_id: str, course_offer_n
         return response.text
     else:
         return f"Failed to fetch data: {response.status_code}"
+
+def get_course_details_single_input(arg_str: str) -> str:
+    # Expect a single string in the format "course_id,course_offer_number", e.g. "027568,1"
+    try:
+        course_id, course_offer_number = arg_str.split(",")
+        course_id = course_id.strip()
+        course_offer_number = course_offer_number.strip()
+        return get_detailed_course_information_from_duke_api(course_id, course_offer_number)
+    except ValueError:
+        return "Error: Please provide input in the form 'course_id,course_offer_number'"
     
 def get_people_information_from_duke_api(name: str):
     """
@@ -312,7 +418,6 @@ def get_people_information_from_duke_api(name: str):
     else:
         return f"Failed to fetch data: {response.status_code}"
 
-# New search functions for format compatibility
 def search_subject_by_code(query):
     """
     Search for subjects matching a code or description.
@@ -388,6 +493,12 @@ def search_category_format(query):
 def get_pratt_info_from_serpapi(query="Duke Pratt School of Engineering", api_key=None, filter_domain=True):
      """
      Retrieve information about Duke's Pratt School of Engineering using SerpAPI.
+     Args:
+        query (str): The search query to use for retrieving information.
+        api_key (str): Optional; SerpAPI key. If not provided, it will be read from the environment variable SERPAPI_API_KEY.
+        filter_domain (bool): If True, filter results to prioritize pratt.duke.edu and duke.edu domains.
+     Returns:
+        str: JSON string containing the search results or an error message.
      """
      if api_key is None:
          api_key = os.environ.get("SERPAPI_API_KEY")
@@ -421,6 +532,11 @@ def get_pratt_info_from_serpapi(query="Duke Pratt School of Engineering", api_ke
 def process_serpapi_results(search_results, filter_domain=True):
      """
      Process and filter SerpAPI results to extract the most relevant information.
+     Args:
+        search_results (dict): The raw search results from SerpAPI.
+        filter_domain (bool): If True, filter results to prioritize pratt.duke.edu and duke.edu domains.
+     Returns:
+        dict: Processed search results containing metadata, organic results, knowledge graph, and related questions.
      """
      processed_data = {
          "search_metadata": {},
@@ -492,57 +608,3 @@ def process_serpapi_results(search_results, filter_domain=True):
              })
      
      return processed_data
- 
-def get_specific_pratt_info(topic="general", subtopic=None, api_key="9339dbe03e129628964af59694c4709f334ee7bf84e7c0c1e335cbc9ea0bbaf6"):
-     """
-     Retrieve specific information about Duke's Pratt School of Engineering using SerpAPI.
-     """
-     # Map topics to specific search queries
-     topic_queries = {
-         "general": "Duke Pratt School of Engineering overview information",
-         "academics": "Duke Pratt School of Engineering academic programs degrees majors",
-         "admissions": "Duke Pratt School of Engineering admissions requirements application deadlines",
-         "ai_meng": "Duke Pratt AI for Product Innovation MEng program curriculum courses",
-         "student_life": "Duke Pratt School of Engineering student life experience campus",
-         "research": "Duke Pratt School of Engineering research areas labs projects",
-         "faculty": "Duke Pratt School of Engineering faculty professors researchers",
-         "events": "Duke Pratt School of Engineering events workshops seminars"
-     }
-     
-     # Map subtopics for more specific queries
-     subtopic_queries = {
-         "academics": {
-             "undergraduate": "Duke Pratt School of Engineering undergraduate programs BSE degrees majors",
-             "graduate": "Duke Pratt School of Engineering graduate programs masters PhD",
-             "courses": "Duke Pratt School of Engineering course offerings classes",
-             "requirements": "Duke Pratt School of Engineering degree requirements curriculum"
-         },
-         "admissions": {
-             "undergraduate": "Duke Pratt School of Engineering undergraduate admissions requirements deadlines",
-             "graduate": "Duke Pratt School of Engineering graduate admissions requirements deadlines",
-             "deadlines": "Duke Pratt School of Engineering application deadlines",
-             "requirements": "Duke Pratt School of Engineering application requirements"
-         },
-         "ai_meng": {
-             "curriculum": "Duke Pratt AI for Product Innovation MEng program curriculum courses",
-             "admissions": "Duke Pratt AI for Product Innovation MEng program admissions requirements",
-             "careers": "Duke Pratt AI for Product Innovation MEng program career outcomes jobs",
-             "faculty": "Duke Pratt AI for Product Innovation MEng program faculty instructors"
-         }
-     }
-     
-     # Check if the topic is valid
-     if topic not in topic_queries:
-         return json.dumps({
-             "error": f"Topic '{topic}' not found",
-             "available_topics": list(topic_queries.keys())
-         })
-     
-     # Construct the query based on topic and subtopic
-     if subtopic and topic in subtopic_queries and subtopic in subtopic_queries[topic]:
-         query = subtopic_queries[topic][subtopic]
-     else:
-         query = topic_queries[topic]
-     
-     # Call the SerpAPI search function
-     return get_pratt_info_from_serpapi(query, api_key)
