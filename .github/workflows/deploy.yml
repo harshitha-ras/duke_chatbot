@@ -9,6 +9,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Create SSH directory
+        run: mkdir -p ~/.ssh
+
+      - name: Write SSH key
+        run: echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+
+      - name: Set SSH key permissions
+        run: chmod 400 ~/.ssh/id_rsa
+
       - name: List SSH keys
         run: ls -lha ~/.ssh
 
